@@ -53,7 +53,11 @@ from src.full_model.run_configurations import (
 )
 from src.path_datasets_and_weights import path_full_dataset, path_runs_full_model
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s]: %(message)s")
 log = logging.getLogger(__name__)
@@ -120,7 +124,9 @@ def train_model(
     run_params["checkpoints_folder_path"] = checkpoints_folder_path
     run_params["lowest_val_loss"] = lowest_val_loss
     run_params["best_epoch"] = None  # the epoch with the lowest val loss overall
-    run_params["overall_steps_taken"] = overall_steps_taken  # for logging to tensorboard
+    run_params["overall_steps_taken"] = (
+        overall_steps_taken  # for logging to tensorboard
+    )
     run_params["log_file"] = log_file  # for logging error messages (e.g. OOM)
 
     # for gradient accumulation
@@ -143,7 +149,9 @@ def train_model(
         if not PRETRAIN_WITHOUT_LM_MODEL:
             train_losses_dict["language_model_loss"] = 0.0
 
-        run_params["steps_taken"] = 0  # to know when to evaluate model during epoch and to normalize losses
+        run_params["steps_taken"] = (
+            0  # to know when to evaluate model during epoch and to normalize losses
+        )
 
         for num_batch, batch in tqdm(enumerate(train_dl)):
             images = batch["images"]
@@ -154,7 +162,10 @@ def train_model(
             batch_size = images.size(0)
 
             images = images.to(device, non_blocking=True)
-            image_targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in image_targets]
+            image_targets = [
+                {k: v.to(device, non_blocking=True) for k, v in t.items()}
+                for t in image_targets
+            ]
             region_has_sentence = region_has_sentence.to(device, non_blocking=True)
             region_is_abnormal = region_is_abnormal.to(device, non_blocking=True)
 
@@ -170,7 +181,14 @@ def train_model(
 
             try:
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    output = model(images, image_targets, input_ids, attention_mask, region_has_sentence, region_is_abnormal)
+                    output = model(
+                        images,
+                        image_targets,
+                        input_ids,
+                        attention_mask,
+                        region_has_sentence,
+                        region_is_abnormal,
+                    )
 
                     # output == -1 if the region features that would have been passed into the language model were empty (see forward method for more details)
                     # this can happen if e.g. the object detector did not detect any regions in an image (e.g. there are a couple of lateral chest x-rays in ChestImaGenome,
@@ -178,7 +196,9 @@ def train_model(
                     if output == -1:
                         with open(run_params["log_file"], "a") as f:
                             f.write("Training:\n")
-                            f.write(f"Empty region features before language model at epoch {epoch}, batch number {num_batch}.\n\n")
+                            f.write(
+                                f"Empty region features before language model at epoch {epoch}, batch number {num_batch}.\n\n"
+                            )
 
                         optimizer.zero_grad()
                         continue
@@ -198,11 +218,17 @@ def train_model(
                         ) = output
 
                     # sum up all 4 losses from the object detector
-                    obj_detector_losses = sum(loss for loss in obj_detector_loss_dict.values())
+                    obj_detector_losses = sum(
+                        loss for loss in obj_detector_loss_dict.values()
+                    )
 
                     # sum up the rest of the losses
                     total_loss = (
-                        WEIGHT_OBJECT_DETECTOR_LOSS * obj_detector_losses + WEIGHT_BINARY_CLASSIFIER_REGION_SELECTION_LOSS * classifier_loss_region_selection + WEIGHT_BINARY_CLASSIFIER_REGION_ABNORMAL_LOSS * classifier_loss_region_abnormal
+                        WEIGHT_OBJECT_DETECTOR_LOSS * obj_detector_losses
+                        + WEIGHT_BINARY_CLASSIFIER_REGION_SELECTION_LOSS
+                        * classifier_loss_region_selection
+                        + WEIGHT_BINARY_CLASSIFIER_REGION_ABNORMAL_LOSS
+                        * classifier_loss_region_abnormal
                     )
 
                     if not PRETRAIN_WITHOUT_LM_MODEL:
@@ -255,7 +281,9 @@ def train_model(
             run_params["overall_steps_taken"] += 1
 
             # evaluate every k batches and at the end of each epoch
-            if run_params["steps_taken"] >= EVALUATE_EVERY_K_BATCHES or (num_batch + 1) == len(train_dl):
+            if run_params["steps_taken"] >= EVALUATE_EVERY_K_BATCHES or (
+                num_batch + 1
+            ) == len(train_dl):
 
                 log.info(f"Evaluating at step {run_params['overall_steps_taken']}!")
                 evaluate_model(
@@ -268,9 +296,11 @@ def train_model(
                     writer,
                     tokenizer,
                     run_params,
-                    generated_sentences_and_reports_folder_path
+                    generated_sentences_and_reports_folder_path,
                 )
-                log.info(f"Metrics evaluated at step {run_params['overall_steps_taken']}!")
+                log.info(
+                    f"Metrics evaluated at step {run_params['overall_steps_taken']}!"
+                )
 
                 # set the model back to training
                 model.train()
@@ -282,7 +312,9 @@ def train_model(
                 optimizer.zero_grad()
 
     log.info("Finished training!")
-    log.info(f"Lowest overall val loss: {run_params['lowest_val_loss']:.3f} at epoch {run_params['best_epoch']}")
+    log.info(
+        f"Lowest overall val loss: {run_params['lowest_val_loss']:.3f} at epoch {run_params['best_epoch']}"
+    )
     return None
 
 
@@ -309,8 +341,16 @@ def get_data_loaders(tokenizer, train_dataset, val_dataset):
         np.random.seed(worker_seed)
         random.seed(worker_seed)
 
-    custom_collate_train = CustomCollator(tokenizer=tokenizer, is_val_or_test=False, pretrain_without_lm_model=PRETRAIN_WITHOUT_LM_MODEL)
-    custom_collate_val = CustomCollator(tokenizer=tokenizer, is_val_or_test=True, pretrain_without_lm_model=PRETRAIN_WITHOUT_LM_MODEL)
+    custom_collate_train = CustomCollator(
+        tokenizer=tokenizer,
+        is_val_or_test=False,
+        pretrain_without_lm_model=PRETRAIN_WITHOUT_LM_MODEL,
+    )
+    custom_collate_val = CustomCollator(
+        tokenizer=tokenizer,
+        is_val_or_test=True,
+        pretrain_without_lm_model=PRETRAIN_WITHOUT_LM_MODEL,
+    )
 
     g = torch.Generator()
     g.manual_seed(SEED)
@@ -357,9 +397,18 @@ def get_transforms(dataset: str):
             # randomly (by default prob=0.5) translate and rotate image
             # mode and cval specify that black pixels are used to fill in newly created pixels
             # translate between -2% and 2% of the image height/width, rotate between -2 and 2 degrees
-            A.Affine(mode=cv2.BORDER_CONSTANT, cval=0, translate_percent=(-0.02, 0.02), rotate=(-2, 2)),
+            A.Affine(
+                mode=cv2.BORDER_CONSTANT,
+                cval=0,
+                translate_percent=(-0.02, 0.02),
+                rotate=(-2, 2),
+            ),
             # PadIfNeeded: pads both sides of the shorter edge with 0's (black pixels)
-            A.PadIfNeeded(min_height=IMAGE_INPUT_SIZE, min_width=IMAGE_INPUT_SIZE, border_mode=cv2.BORDER_CONSTANT),
+            A.PadIfNeeded(
+                min_height=IMAGE_INPUT_SIZE,
+                min_width=IMAGE_INPUT_SIZE,
+                border_mode=cv2.BORDER_CONSTANT,
+            ),
             A.Normalize(mean=mean, std=std),
             ToTensorV2(),
         ],
@@ -370,7 +419,11 @@ def get_transforms(dataset: str):
     val_transforms = A.Compose(
         [
             A.LongestMaxSize(max_size=IMAGE_INPUT_SIZE, interpolation=cv2.INTER_AREA),
-            A.PadIfNeeded(min_height=IMAGE_INPUT_SIZE, min_width=IMAGE_INPUT_SIZE, border_mode=cv2.BORDER_CONSTANT),
+            A.PadIfNeeded(
+                min_height=IMAGE_INPUT_SIZE,
+                min_width=IMAGE_INPUT_SIZE,
+                border_mode=cv2.BORDER_CONSTANT,
+            ),
             A.Normalize(mean=mean, std=std),
             ToTensorV2(),
         ],
@@ -389,7 +442,9 @@ def get_tokenized_datasets(tokenizer, raw_train_dataset, raw_val_dataset):
         bos_token = "<|endoftext|>"  # note: in the GPT2 tokenizer, bos_token = eos_token = "<|endoftext|>"
         eos_token = "<|endoftext|>"
 
-        phrases_with_special_tokens = [bos_token + phrase + eos_token for phrase in phrases]
+        phrases_with_special_tokens = [
+            bos_token + phrase + eos_token for phrase in phrases
+        ]
 
         # the tokenizer will return input_ids of type List[List[int]] and attention_mask of type List[List[int]]
         return tokenizer(phrases_with_special_tokens, truncation=True, max_length=1024)
@@ -442,17 +497,27 @@ def get_datasets(config_file_path):
     }
 
     datasets_as_dfs = {}
-    datasets_as_dfs["train"] = pd.read_csv(os.path.join(path_full_dataset, "train.csv"), usecols=usecols, converters=converters)
+    datasets_as_dfs["train"] = pd.read_csv(
+        os.path.join(path_full_dataset, "train.csv"),
+        usecols=usecols,
+        converters=converters,
+    )
 
     # val dataset has additional "reference_report" column
     usecols.append("reference_report")
-    datasets_as_dfs["valid"] = pd.read_csv(os.path.join(path_full_dataset, "valid.csv"), usecols=usecols, converters=converters)
+    datasets_as_dfs["valid"] = pd.read_csv(
+        os.path.join(path_full_dataset, "valid.csv"),
+        usecols=usecols,
+        converters=converters,
+    )
 
     total_num_samples_train = len(datasets_as_dfs["train"])
     total_num_samples_val = len(datasets_as_dfs["valid"])
 
     # compute new number of samples for both train and val
-    new_num_samples_train = int(PERCENTAGE_OF_TRAIN_SET_TO_USE * total_num_samples_train)
+    new_num_samples_train = int(
+        PERCENTAGE_OF_TRAIN_SET_TO_USE * total_num_samples_train
+    )
     new_num_samples_val = int(PERCENTAGE_OF_VAL_SET_TO_USE * total_num_samples_val)
 
     log.info(f"Train: {new_num_samples_train} images")
@@ -485,9 +550,15 @@ def create_run_folder():
     run_folder_path = os.path.join(path_runs_full_model, f"run_{RUN}")
     checkpoints_folder_path = os.path.join(run_folder_path, "checkpoints")
     tensorboard_folder_path = os.path.join(run_folder_path, "tensorboard")
-    generated_sentences_and_reports_folder_path = os.path.join(run_folder_path, "generated_sentences_and_reports")
-    generated_sentences_folder_path = os.path.join(generated_sentences_and_reports_folder_path, "generated_sentences")
-    generated_reports_folder_path = os.path.join(generated_sentences_and_reports_folder_path, "generated_reports")
+    generated_sentences_and_reports_folder_path = os.path.join(
+        run_folder_path, "generated_sentences_and_reports"
+    )
+    generated_sentences_folder_path = os.path.join(
+        generated_sentences_and_reports_folder_path, "generated_sentences"
+    )
+    generated_reports_folder_path = os.path.join(
+        generated_sentences_and_reports_folder_path, "generated_reports"
+    )
     log_file = os.path.join(run_folder_path, "log_file")
 
     if os.path.exists(run_folder_path):
@@ -540,11 +611,23 @@ def create_run_folder():
         for param_name, param_value in config_parameters.items():
             f.write(f"\t{param_name}: {param_value}\n")
 
-    return checkpoints_folder_path, tensorboard_folder_path, config_file_path, generated_sentences_and_reports_folder_path, log_file
+    return (
+        checkpoints_folder_path,
+        tensorboard_folder_path,
+        config_file_path,
+        generated_sentences_and_reports_folder_path,
+        log_file,
+    )
 
 
 def main():
-    (checkpoints_folder_path, tensorboard_folder_path, config_file_path, generated_sentences_and_reports_folder_path, log_file) = create_run_folder()
+    (
+        checkpoints_folder_path,
+        tensorboard_folder_path,
+        config_file_path,
+        generated_sentences_and_reports_folder_path,
+        log_file,
+    ) = create_run_folder()
 
     # the datasets still contain the untokenized phrases
     raw_train_dataset, raw_val_dataset = get_datasets(config_file_path)
@@ -552,15 +635,23 @@ def main():
     tokenizer = get_tokenizer()
 
     # tokenize the raw datasets
-    tokenized_train_dataset, tokenized_val_dataset = get_tokenized_datasets(tokenizer, raw_train_dataset, raw_val_dataset)
+    tokenized_train_dataset, tokenized_val_dataset = get_tokenized_datasets(
+        tokenizer, raw_train_dataset, raw_val_dataset
+    )
 
     train_transforms = get_transforms("train")
     val_transforms = get_transforms("val")
 
-    train_dataset_complete = CustomDataset("train", tokenized_train_dataset, train_transforms, log)
-    val_dataset_complete = CustomDataset("val", tokenized_val_dataset, val_transforms, log)
+    train_dataset_complete = CustomDataset(
+        "train", tokenized_train_dataset, train_transforms, log
+    )
+    val_dataset_complete = CustomDataset(
+        "val", tokenized_val_dataset, val_transforms, log
+    )
 
-    train_loader, val_loader = get_data_loaders(tokenizer, train_dataset_complete, val_dataset_complete)
+    train_loader, val_loader = get_data_loaders(
+        tokenizer, train_dataset_complete, val_dataset_complete
+    )
 
     # resume_training = False
     checkpoint = None
@@ -585,7 +676,14 @@ def main():
     #     overall_steps_taken = checkpoint["overall_steps_taken"]
     #     lowest_val_loss = checkpoint["lowest_val_loss"]
 
-    lr_scheduler = ReduceLROnPlateau(opt, mode="min", factor=FACTOR_LR_SCHEDULER, patience=PATIENCE_LR_SCHEDULER, threshold=THRESHOLD_LR_SCHEDULER, cooldown=COOLDOWN_LR_SCHEDULER)
+    lr_scheduler = ReduceLROnPlateau(
+        opt,
+        mode="min",
+        factor=FACTOR_LR_SCHEDULER,
+        patience=PATIENCE_LR_SCHEDULER,
+        threshold=THRESHOLD_LR_SCHEDULER,
+        cooldown=COOLDOWN_LR_SCHEDULER,
+    )
     writer = SummaryWriter(log_dir=tensorboard_folder_path)
 
     if checkpoint:

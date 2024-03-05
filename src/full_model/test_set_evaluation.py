@@ -30,11 +30,15 @@ from src.full_model.evaluate_full_model.evaluate_language_model import (
     update_gen_and_ref_sentences_for_regions,
     update_num_generated_sentences_per_image,
     update_gen_sentences_with_corresponding_regions,
-    compute_language_model_scores
+    compute_language_model_scores,
 )
 from src.full_model.report_generation_model import ReportGenerationModel
 from src.full_model.train_full_model import get_tokenizer
-from src.path_datasets_and_weights import path_full_dataset, path_runs_full_model, path_test_set_evaluation_scores_txt_files
+from src.path_datasets_and_weights import (
+    path_full_dataset,
+    path_runs_full_model,
+    path_test_set_evaluation_scores_txt_files,
+)
 
 # specify the checkpoint you want to evaluate by setting "RUN" and "CHECKPOINT"
 RUN = 38
@@ -48,7 +52,11 @@ MAX_NUM_TOKENS_GENERATE = 300
 NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 100
 NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 100
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s]: %(message)s")
 log = logging.getLogger(__name__)
@@ -69,18 +77,22 @@ Folder specified by path_test_set_evaluation_scores_txt_files will have these fi
     - generated_abnormal_sentences.txt
     - generated_reports.txt
 """
-final_scores_txt_file = os.path.join(path_test_set_evaluation_scores_txt_files, "final_scores.txt")
+final_scores_txt_file = os.path.join(
+    path_test_set_evaluation_scores_txt_files, "final_scores.txt"
+)
 
 
 def write_all_scores_to_file(
     obj_detector_scores,
     region_selection_scores,
     region_abnormal_scores,
-    language_model_scores
+    language_model_scores,
 ):
     def write_obj_detector_scores():
         with open(final_scores_txt_file, "a") as f:
-            f.write(f"avg_num_detected_regions_per_image: {obj_detector_scores['avg_num_detected_regions_per_image']:.5f}\n")
+            f.write(
+                f"avg_num_detected_regions_per_image: {obj_detector_scores['avg_num_detected_regions_per_image']:.5f}\n"
+            )
             f.write(f"avg_iou: {obj_detector_scores['avg_iou']:.5f}\n")
 
         # replace white space by underscore for each region name (i.e. "right upper lung" -> "right_upper_lung")
@@ -88,7 +100,9 @@ def write_all_scores_to_file(
         avg_detections_per_region = obj_detector_scores["avg_detections_per_region"]
         avg_iou_per_region = obj_detector_scores["avg_iou_per_region"]
 
-        for region_, avg_detections_region in zip(anatomical_regions, avg_detections_per_region):
+        for region_, avg_detections_region in zip(
+            anatomical_regions, avg_detections_per_region
+        ):
             with open(final_scores_txt_file, "a") as f:
                 f.write(f"num_detected_{region_}: {avg_detections_region:.5f}\n")
 
@@ -149,7 +163,12 @@ def write_all_scores_to_file(
         and condition_* are from the 14 conditions in src/CheXbert/src/constants.py
         """
         for k, v in ce_score_dict.items():
-            if k.startswith("precision") or k.startswith("recall") or k.startswith("f1") or k.startswith("acc"):
+            if (
+                k.startswith("precision")
+                or k.startswith("recall")
+                or k.startswith("f1")
+                or k.startswith("acc")
+            ):
                 with open(final_scores_txt_file, "a") as f:
                     f.write(f"report_CE_{k}: {v:.5f}\n")
             else:
@@ -171,11 +190,15 @@ def write_all_scores_to_file(
         for subset in language_model_scores:
             if subset == "region":
                 for region_name in language_model_scores["region"]:
-                    for metric, score in language_model_scores["region"][region_name].items():
+                    for metric, score in language_model_scores["region"][
+                        region_name
+                    ].items():
                         # replace white space by underscore for region name (i.e. "right upper lung" -> "right_upper_lung")
                         region_name_underscored = "_".join(region_name.split())
                         with open(final_scores_txt_file, "a") as f:
-                            f.write(f"region_{region_name_underscored}_{metric}: {score:.5f}\n")
+                            f.write(
+                                f"region_{region_name_underscored}_{metric}: {score:.5f}\n"
+                            )
             else:
                 for metric, score in language_model_scores[subset].items():
                     if metric == "CE":
@@ -188,7 +211,9 @@ def write_all_scores_to_file(
     with open(final_scores_txt_file, "a") as f:
         f.write(f"Run: {RUN}\n")
         f.write(f"Checkpoint: {CHECKPOINT}\n")
-        f.write(f"BertScore for removing similar generated sentences: {BERTSCORE_SIMILARITY_THRESHOLD}\n")
+        f.write(
+            f"BertScore for removing similar generated sentences: {BERTSCORE_SIMILARITY_THRESHOLD}\n"
+        )
         f.write(f"Num beams: {NUM_BEAMS}\n")
 
     write_obj_detector_scores()
@@ -198,13 +223,16 @@ def write_all_scores_to_file(
 
 
 def write_sentences_and_reports_to_file_for_test_set(
-    gen_and_ref_sentences,
-    gen_and_ref_reports,
-    gen_sentences_with_corresponding_regions
+    gen_and_ref_sentences, gen_and_ref_reports, gen_sentences_with_corresponding_regions
 ):
     def write_sentences():
-        txt_file_name = os.path.join(path_test_set_evaluation_scores_txt_files, "generated_sentences.txt")
-        txt_file_name_abnormal = os.path.join(path_test_set_evaluation_scores_txt_files, "generated_abnormal_sentences.txt")
+        txt_file_name = os.path.join(
+            path_test_set_evaluation_scores_txt_files, "generated_sentences.txt"
+        )
+        txt_file_name_abnormal = os.path.join(
+            path_test_set_evaluation_scores_txt_files,
+            "generated_abnormal_sentences.txt",
+        )
 
         with open(txt_file_name, "a") as f:
             for gen_sent, ref_sent in zip(generated_sentences, reference_sentences):
@@ -212,19 +240,29 @@ def write_sentences_and_reports_to_file_for_test_set(
                 f.write(f"Reference sentence: {ref_sent}\n\n")
 
         with open(txt_file_name_abnormal, "a") as f:
-            for gen_sent, ref_sent in zip(generated_sentences_abnormal_regions, reference_sentences_abnormal_regions):
+            for gen_sent, ref_sent in zip(
+                generated_sentences_abnormal_regions,
+                reference_sentences_abnormal_regions,
+            ):
                 f.write(f"Generated sentence: {gen_sent}\n")
                 f.write(f"Reference sentence: {ref_sent}\n\n")
 
     def write_reports():
-        txt_file_name = os.path.join(path_test_set_evaluation_scores_txt_files, "generated_reports.txt")
+        txt_file_name = os.path.join(
+            path_test_set_evaluation_scores_txt_files, "generated_reports.txt"
+        )
 
         with open(txt_file_name, "a") as f:
-            for gen_report, ref_report, removed_similar_gen_sents, gen_sents_with_regions_single_report in zip(
+            for (
+                gen_report,
+                ref_report,
+                removed_similar_gen_sents,
+                gen_sents_with_regions_single_report,
+            ) in zip(
                 generated_reports,
                 reference_reports,
                 removed_similar_generated_sentences,
-                gen_sentences_with_corresponding_regions
+                gen_sentences_with_corresponding_regions,
             ):
                 f.write(f"Generated report: {gen_report}\n\n")
                 f.write(f"Reference report: {ref_report}\n\n")
@@ -235,28 +273,49 @@ def write_sentences_and_reports_to_file_for_test_set(
                 f.write("\n")
 
                 f.write("Generated sentences that were removed:\n")
-                for gen_sent, list_similar_gen_sents in removed_similar_gen_sents.items():
+                for (
+                    gen_sent,
+                    list_similar_gen_sents,
+                ) in removed_similar_gen_sents.items():
                     f.write(f"\t{gen_sent} == {list_similar_gen_sents}\n")
                 f.write("\n")
 
                 f.write("=" * 30)
                 f.write("\n\n")
 
-    num_generated_sentences_to_save = NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE * BATCH_SIZE
-    num_generated_reports_to_save = NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE * BATCH_SIZE
+    num_generated_sentences_to_save = (
+        NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE * BATCH_SIZE
+    )
+    num_generated_reports_to_save = (
+        NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE * BATCH_SIZE
+    )
 
     # all below are list of str
-    generated_sentences = gen_and_ref_sentences["generated_sentences"][:num_generated_sentences_to_save]
-    generated_sentences_abnormal_regions = gen_and_ref_sentences["generated_sentences_abnormal_selected_regions"][:num_generated_sentences_to_save]
-    reference_sentences = gen_and_ref_sentences["reference_sentences"][:num_generated_sentences_to_save]
-    reference_sentences_abnormal_regions = gen_and_ref_sentences["reference_sentences_abnormal_selected_regions"][:num_generated_sentences_to_save]
+    generated_sentences = gen_and_ref_sentences["generated_sentences"][
+        :num_generated_sentences_to_save
+    ]
+    generated_sentences_abnormal_regions = gen_and_ref_sentences[
+        "generated_sentences_abnormal_selected_regions"
+    ][:num_generated_sentences_to_save]
+    reference_sentences = gen_and_ref_sentences["reference_sentences"][
+        :num_generated_sentences_to_save
+    ]
+    reference_sentences_abnormal_regions = gen_and_ref_sentences[
+        "reference_sentences_abnormal_selected_regions"
+    ][:num_generated_sentences_to_save]
 
     write_sentences()
 
     # all below are list of str except removed_similar_generated_sentences which is a list of dict
-    generated_reports = gen_and_ref_reports["generated_reports"][:num_generated_reports_to_save]
-    reference_reports = gen_and_ref_reports["reference_reports"][:num_generated_reports_to_save]
-    removed_similar_generated_sentences = gen_and_ref_reports["removed_similar_generated_sentences"][:num_generated_reports_to_save]
+    generated_reports = gen_and_ref_reports["generated_reports"][
+        :num_generated_reports_to_save
+    ]
+    reference_reports = gen_and_ref_reports["reference_reports"][
+        :num_generated_reports_to_save
+    ]
+    removed_similar_generated_sentences = gen_and_ref_reports[
+        "removed_similar_generated_sentences"
+    ][:num_generated_reports_to_save]
 
     write_reports()
 
@@ -273,7 +332,9 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
             for num_batch, batch in tqdm(enumerate(test_loader)):
 
                 images = batch["images"]  # shape [batch_size x 1 x 512 x 512]
-                region_is_abnormal = batch["region_is_abnormal"].numpy()  # boolean array of shape [batch_size x 29]
+                region_is_abnormal = batch[
+                    "region_is_abnormal"
+                ].numpy()  # boolean array of shape [batch_size x 29]
 
                 # List[List[str]] that holds the reference phrases. The inner list holds all reference phrases of a single image
                 reference_sentences = batch["reference_sentences"]
@@ -282,7 +343,7 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                 reference_reports = batch["reference_reports"]
 
                 try:
-                    with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
                         output = model.generate(
                             images.to(device, non_blocking=True),
                             max_length=MAX_NUM_TOKENS_GENERATE,
@@ -310,7 +371,9 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                 if output == -1:
                     with open(final_scores_txt_file, "a") as f:
                         f.write("Generation:\n")
-                        f.write(f"Empty region features before language model at batch number {num_batch}.\n\n")
+                        f.write(
+                            f"Empty region features before language model at batch number {num_batch}.\n\n"
+                        )
 
                     continue
                 else:
@@ -320,14 +383,18 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
 
                 # generated_sentences_for_selected_regions is a List[str] of length "num_regions_selected_in_batch"
                 generated_sents_for_selected_regions = tokenizer.batch_decode(
-                    beam_search_output, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    beam_search_output,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
                 )
 
                 # filter reference_sentences to those that correspond to the generated_sentences for the selected regions.
                 # reference_sentences_for_selected_regions will therefore be a List[str] of length "num_regions_selected_in_batch"
                 # (i.e. same length as generated_sentences_for_selected_regions)
-                reference_sents_for_selected_regions = get_ref_sentences_for_selected_regions(
-                    reference_sentences, selected_regions
+                reference_sents_for_selected_regions = (
+                    get_ref_sentences_for_selected_regions(
+                        reference_sentences, selected_regions
+                    )
                 )
 
                 (
@@ -335,30 +402,62 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                     gen_sents_for_abnormal_selected_regions,
                     ref_sents_for_normal_selected_regions,
                     ref_sents_for_abnormal_selected_regions,
-                ) = get_sents_for_normal_abnormal_selected_regions(region_is_abnormal, selected_regions, generated_sents_for_selected_regions, reference_sents_for_selected_regions)
-
-                generated_reports, removed_similar_generated_sentences = get_generated_reports(
-                    generated_sents_for_selected_regions,
+                ) = get_sents_for_normal_abnormal_selected_regions(
+                    region_is_abnormal,
                     selected_regions,
-                    sentence_tokenizer,
-                    BERTSCORE_SIMILARITY_THRESHOLD
+                    generated_sents_for_selected_regions,
+                    reference_sents_for_selected_regions,
                 )
 
-                gen_and_ref_sentences["generated_sentences"].extend(generated_sents_for_selected_regions)
-                gen_and_ref_sentences["generated_sentences_normal_selected_regions"].extend(gen_sents_for_normal_selected_regions)
-                gen_and_ref_sentences["generated_sentences_abnormal_selected_regions"].extend(gen_sents_for_abnormal_selected_regions)
-                gen_and_ref_sentences["reference_sentences"].extend(reference_sents_for_selected_regions)
-                gen_and_ref_sentences["reference_sentences_normal_selected_regions"].extend(ref_sents_for_normal_selected_regions)
-                gen_and_ref_sentences["reference_sentences_abnormal_selected_regions"].extend(ref_sents_for_abnormal_selected_regions)
+                generated_reports, removed_similar_generated_sentences = (
+                    get_generated_reports(
+                        generated_sents_for_selected_regions,
+                        selected_regions,
+                        sentence_tokenizer,
+                        BERTSCORE_SIMILARITY_THRESHOLD,
+                    )
+                )
+
+                gen_and_ref_sentences["generated_sentences"].extend(
+                    generated_sents_for_selected_regions
+                )
+                gen_and_ref_sentences[
+                    "generated_sentences_normal_selected_regions"
+                ].extend(gen_sents_for_normal_selected_regions)
+                gen_and_ref_sentences[
+                    "generated_sentences_abnormal_selected_regions"
+                ].extend(gen_sents_for_abnormal_selected_regions)
+                gen_and_ref_sentences["reference_sentences"].extend(
+                    reference_sents_for_selected_regions
+                )
+                gen_and_ref_sentences[
+                    "reference_sentences_normal_selected_regions"
+                ].extend(ref_sents_for_normal_selected_regions)
+                gen_and_ref_sentences[
+                    "reference_sentences_abnormal_selected_regions"
+                ].extend(ref_sents_for_abnormal_selected_regions)
                 gen_and_ref_reports["generated_reports"].extend(generated_reports)
                 gen_and_ref_reports["reference_reports"].extend(reference_reports)
-                gen_and_ref_reports["removed_similar_generated_sentences"].extend(removed_similar_generated_sentences)
+                gen_and_ref_reports["removed_similar_generated_sentences"].extend(
+                    removed_similar_generated_sentences
+                )
 
-                update_gen_and_ref_sentences_for_regions(gen_and_ref_sentences, generated_sents_for_selected_regions, reference_sents_for_selected_regions, selected_regions)
-                update_num_generated_sentences_per_image(gen_and_ref_sentences, selected_regions)
+                update_gen_and_ref_sentences_for_regions(
+                    gen_and_ref_sentences,
+                    generated_sents_for_selected_regions,
+                    reference_sents_for_selected_regions,
+                    selected_regions,
+                )
+                update_num_generated_sentences_per_image(
+                    gen_and_ref_sentences, selected_regions
+                )
 
                 if num_batch < NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE:
-                    update_gen_sentences_with_corresponding_regions(gen_sentences_with_corresponding_regions, generated_sents_for_selected_regions, selected_regions)
+                    update_gen_sentences_with_corresponding_regions(
+                        gen_sentences_with_corresponding_regions,
+                        generated_sents_for_selected_regions,
+                        selected_regions,
+                    )
 
     # whilst iterating over the validation loader, save the (all, normal, abnormal) generated and reference sentences in the respective lists
     # the list under the key "num_generated_sentences_per_image" will hold integers that represent how many sentences were generated for each image
@@ -371,14 +470,14 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
         "reference_sentences": [],
         "reference_sentences_normal_selected_regions": [],
         "reference_sentences_abnormal_selected_regions": [],
-        "num_generated_sentences_per_image": []
+        "num_generated_sentences_per_image": [],
     }
 
     # also save the generated and reference sentences on a per region basis
     for region_index, _ in enumerate(ANATOMICAL_REGIONS):
         gen_and_ref_sentences[region_index] = {
             "generated_sentences": [],
-            "reference_sentences": []
+            "reference_sentences": [],
         }
 
     # and of course the generated and reference reports, and additionally keep track of the generated sentences
@@ -414,16 +513,22 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
     )
 
     with open(final_scores_txt_file, "a") as f:
-        f.write(f"Num generated reports: {len(gen_and_ref_reports['generated_reports'])}\n")
+        f.write(
+            f"Num generated reports: {len(gen_and_ref_reports['generated_reports'])}\n"
+        )
 
     log.info("Computing language_model_scores...")
-    language_model_scores = compute_language_model_scores(gen_and_ref_sentences, gen_and_ref_reports)
+    language_model_scores = compute_language_model_scores(
+        gen_and_ref_sentences, gen_and_ref_reports
+    )
     log.info("Computing language_model_scores... DONE.")
 
     return language_model_scores
 
 
-def update_object_detector_metrics_test_loader_2(obj_detector_scores, detections, image_targets, class_detected):
+def update_object_detector_metrics_test_loader_2(
+    obj_detector_scores, detections, image_targets, class_detected
+):
     def compute_box_area(box):
         """
         Calculate the area of a box given the 4 corner values.
@@ -471,9 +576,15 @@ def update_object_detector_metrics_test_loader_2(obj_detector_scores, detections
 
             for gt_boxes_missing_bool in gt_boxes_missing_single_image:
                 if gt_boxes_missing_bool:
-                    gt_boxes_single_image.append(torch.tensor([0, 0, 0, 0], dtype=boxes_single_image.dtype, device=device))
+                    gt_boxes_single_image.append(
+                        torch.tensor(
+                            [0, 0, 0, 0], dtype=boxes_single_image.dtype, device=device
+                        )
+                    )
                 else:
-                    gt_boxes_single_image.append(boxes_single_image[curr_index_boxes_single_image])
+                    gt_boxes_single_image.append(
+                        boxes_single_image[curr_index_boxes_single_image]
+                    )
                     curr_index_boxes_single_image += 1
 
             gt_boxes.append(torch.stack(gt_boxes_single_image))
@@ -481,7 +592,9 @@ def update_object_detector_metrics_test_loader_2(obj_detector_scores, detections
         gt_boxes = torch.stack(gt_boxes)
         return gt_boxes
 
-    def compute_intersection_and_union_area_per_region(detections, targets, class_detected):
+    def compute_intersection_and_union_area_per_region(
+        detections, targets, class_detected
+    ):
         # pred_boxes is of shape [batch_size x 29 x 4] and contains the predicted region boxes with the highest score (i.e. top-1)
         # they are sorted in the 2nd dimension, meaning the 1st of the 29 boxes corresponds to the 1st region/class,
         # the 2nd to the 2nd class and so on
@@ -536,14 +649,22 @@ def update_object_detector_metrics_test_loader_2(obj_detector_scores, detections
     # sum up detections for each region
     region_detected_batch = torch.sum(class_detected, dim=0)
 
-    intersection_area_per_region_batch, union_area_per_region_batch = compute_intersection_and_union_area_per_region(detections, image_targets, class_detected)
+    intersection_area_per_region_batch, union_area_per_region_batch = (
+        compute_intersection_and_union_area_per_region(
+            detections, image_targets, class_detected
+        )
+    )
 
     obj_detector_scores["sum_region_detected"] += region_detected_batch
-    obj_detector_scores["sum_intersection_area_per_region"] += intersection_area_per_region_batch
+    obj_detector_scores[
+        "sum_intersection_area_per_region"
+    ] += intersection_area_per_region_batch
     obj_detector_scores["sum_union_area_per_region"] += union_area_per_region_batch
 
 
-def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader, test_2_loader):
+def evaluate_obj_detector_and_binary_classifiers_on_test_set(
+    model, test_loader, test_2_loader
+):
     def iterate_over_test_loader(test_loader, num_images, is_test_2_loader):
         """
         We have to distinguish between test_loader and test_2_loader,
@@ -572,14 +693,22 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader,
                 num_images += batch_size
 
                 images = images.to(device, non_blocking=True)
-                image_targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in image_targets]
+                image_targets = [
+                    {k: v.to(device, non_blocking=True) for k, v in t.items()}
+                    for t in image_targets
+                ]
                 region_has_sentence = region_has_sentence.to(device, non_blocking=True)
                 region_is_abnormal = region_is_abnormal.to(device, non_blocking=True)
 
                 try:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
                         output = model(
-                            images, image_targets, input_ids, attention_mask, region_has_sentence, region_is_abnormal
+                            images,
+                            image_targets,
+                            input_ids,
+                            attention_mask,
+                            region_has_sentence,
+                            region_is_abnormal,
                         )
                 except RuntimeError as e:  # out of memory error
                     if "out of memory" in str(e):
@@ -612,18 +741,28 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader,
 
                 # update scores for object detector metrics
                 if is_test_2_loader:
-                    update_object_detector_metrics_test_loader_2(obj_detector_scores, detections, image_targets, class_detected)
+                    update_object_detector_metrics_test_loader_2(
+                        obj_detector_scores, detections, image_targets, class_detected
+                    )
                 else:
-                    update_object_detector_metrics(obj_detector_scores, detections, image_targets, class_detected)
+                    update_object_detector_metrics(
+                        obj_detector_scores, detections, image_targets, class_detected
+                    )
 
                 # update scores for region selection metrics
                 update_region_selection_metrics(
-                    region_selection_scores, selected_regions, region_has_sentence, region_is_abnormal
+                    region_selection_scores,
+                    selected_regions,
+                    region_has_sentence,
+                    region_is_abnormal,
                 )
 
                 # update scores for region abnormal detection metrics
                 update_region_abnormal_metrics(
-                    region_abnormal_scores, predicted_abnormal_regions, region_is_abnormal, class_detected
+                    region_abnormal_scores,
+                    predicted_abnormal_regions,
+                    region_is_abnormal,
+                    class_detected,
                 )
 
         return num_images
@@ -648,7 +787,9 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader,
     and these averages will be summed up to get the average number of detected regions in an image)
     """
     obj_detector_scores = {}
-    obj_detector_scores["sum_intersection_area_per_region"] = torch.zeros(29, device=device)
+    obj_detector_scores["sum_intersection_area_per_region"] = torch.zeros(
+        29, device=device
+    )
     obj_detector_scores["sum_union_area_per_region"] = torch.zeros(29, device=device)
     obj_detector_scores["sum_region_detected"] = torch.zeros(29, device=device)
 
@@ -690,28 +831,48 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader,
 
     num_images = 0
 
-    log.info("Test loader: computing scores for object detector, region selection and region abnormal module...")
-    num_images = iterate_over_test_loader(test_loader, num_images, is_test_2_loader=False)
-    log.info("Test loader: computing scores for object detector, region selection and region abnormal module... DONE.")
+    log.info(
+        "Test loader: computing scores for object detector, region selection and region abnormal module..."
+    )
+    num_images = iterate_over_test_loader(
+        test_loader, num_images, is_test_2_loader=False
+    )
+    log.info(
+        "Test loader: computing scores for object detector, region selection and region abnormal module... DONE."
+    )
 
-    log.info("Test loader 2: computing scores for object detector, region selection and region abnormal module...")
-    num_images = iterate_over_test_loader(test_2_loader, num_images, is_test_2_loader=True)
-    log.info("Test loader 2: computing scores for object detector, region selection and region abnormal module... DONE.")
+    log.info(
+        "Test loader 2: computing scores for object detector, region selection and region abnormal module..."
+    )
+    num_images = iterate_over_test_loader(
+        test_2_loader, num_images, is_test_2_loader=True
+    )
+    log.info(
+        "Test loader 2: computing scores for object detector, region selection and region abnormal module... DONE."
+    )
 
     # compute object detector scores
     sum_intersection = obj_detector_scores["sum_intersection_area_per_region"]
     sum_union = obj_detector_scores["sum_union_area_per_region"]
-    obj_detector_scores["avg_iou"] = (torch.sum(sum_intersection) / torch.sum(sum_union)).item()
+    obj_detector_scores["avg_iou"] = (
+        torch.sum(sum_intersection) / torch.sum(sum_union)
+    ).item()
     obj_detector_scores["avg_iou_per_region"] = (sum_intersection / sum_union).tolist()
 
     sum_region_detected = obj_detector_scores["sum_region_detected"]
-    obj_detector_scores["avg_num_detected_regions_per_image"] = torch.sum(sum_region_detected / num_images).item()
-    obj_detector_scores["avg_detections_per_region"] = (sum_region_detected / num_images).tolist()
+    obj_detector_scores["avg_num_detected_regions_per_image"] = torch.sum(
+        sum_region_detected / num_images
+    ).item()
+    obj_detector_scores["avg_detections_per_region"] = (
+        sum_region_detected / num_images
+    ).tolist()
 
     # compute the "micro" average scores for region_selection_scores
     for subset in region_selection_scores:
         for metric, score in region_selection_scores[subset].items():
-            region_selection_scores[subset][metric] = score.compute()[1].item()  # only report results for the positive class (hence [1])
+            region_selection_scores[subset][metric] = score.compute()[
+                1
+            ].item()  # only report results for the positive class (hence [1])
 
     # compute the "micro" average scores for region_abnormal_scores
     for metric, score in region_abnormal_scores.items():
@@ -721,21 +882,29 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader,
 
 
 def evaluate_model_on_test_set(model, test_loader, test_2_loader, tokenizer):
-    obj_detector_scores, region_selection_scores, region_abnormal_scores = evaluate_obj_detector_and_binary_classifiers_on_test_set(model, test_loader, test_2_loader)
+    obj_detector_scores, region_selection_scores, region_abnormal_scores = (
+        evaluate_obj_detector_and_binary_classifiers_on_test_set(
+            model, test_loader, test_2_loader
+        )
+    )
 
-    language_model_scores = evaluate_language_model_on_test_set(model, test_loader, test_2_loader, tokenizer)
+    language_model_scores = evaluate_language_model_on_test_set(
+        model, test_loader, test_2_loader, tokenizer
+    )
 
     write_all_scores_to_file(
         obj_detector_scores,
         region_selection_scores,
         region_abnormal_scores,
-        language_model_scores
+        language_model_scores,
     )
 
 
 def get_model():
     checkpoint = torch.load(
-        os.path.join(path_runs_full_model, f"run_{RUN}", "checkpoints", f"{CHECKPOINT}"),
+        os.path.join(
+            path_runs_full_model, f"run_{RUN}", "checkpoints", f"{CHECKPOINT}"
+        ),
         map_location=torch.device("cpu"),
     )
 
@@ -791,7 +960,11 @@ def get_transforms():
     test_transforms = A.Compose(
         [
             A.LongestMaxSize(max_size=IMAGE_INPUT_SIZE, interpolation=cv2.INTER_AREA),
-            A.PadIfNeeded(min_height=IMAGE_INPUT_SIZE, min_width=IMAGE_INPUT_SIZE, border_mode=cv2.BORDER_CONSTANT),
+            A.PadIfNeeded(
+                min_height=IMAGE_INPUT_SIZE,
+                min_width=IMAGE_INPUT_SIZE,
+                border_mode=cv2.BORDER_CONSTANT,
+            ),
             A.Normalize(mean=mean, std=std),
             ToTensorV2(),
         ],
@@ -807,7 +980,9 @@ def get_tokenized_dataset(tokenizer, raw_test_dataset, raw_test_2_dataset):
         bos_token = "<|endoftext|>"  # note: in the GPT2 tokenizer, bos_token = eos_token = "<|endoftext|>"
         eos_token = "<|endoftext|>"
 
-        phrases_with_special_tokens = [bos_token + phrase + eos_token for phrase in phrases]
+        phrases_with_special_tokens = [
+            bos_token + phrase + eos_token for phrase in phrases
+        ]
 
         # the tokenizer will return input_ids of type List[List[int]] and attention_mask of type List[List[int]]
         return tokenizer(phrases_with_special_tokens, truncation=True, max_length=1024)
@@ -837,7 +1012,7 @@ def get_dataset():
         "bbox_phrases",
         "bbox_phrase_exists",
         "bbox_is_abnormal",
-        "reference_report"
+        "reference_report",
     ]
 
     # all of the columns below are stored as strings in the csv_file
@@ -851,8 +1026,16 @@ def get_dataset():
     }
 
     datasets_as_dfs = {}
-    datasets_as_dfs["test"] = pd.read_csv(os.path.join(path_full_dataset, "test.csv"), usecols=usecols, converters=converters)
-    datasets_as_dfs["test-2"] = pd.read_csv(os.path.join(path_full_dataset, "test-2.csv"), usecols=usecols, converters=converters)
+    datasets_as_dfs["test"] = pd.read_csv(
+        os.path.join(path_full_dataset, "test.csv"),
+        usecols=usecols,
+        converters=converters,
+    )
+    datasets_as_dfs["test-2"] = pd.read_csv(
+        os.path.join(path_full_dataset, "test-2.csv"),
+        usecols=usecols,
+        converters=converters,
+    )
 
     raw_test_dataset = Dataset.from_pandas(datasets_as_dfs["test"])
     raw_test_2_dataset = Dataset.from_pandas(datasets_as_dfs["test-2"])
@@ -869,14 +1052,22 @@ def main():
     # (as they were originally made for training the model),
     # it's better to just leave it as it is instead of adding unnecessary complexity
     tokenizer = get_tokenizer()
-    tokenized_test_dataset, tokenized_test_2_dataset = get_tokenized_dataset(tokenizer, raw_test_dataset, raw_test_2_dataset)
+    tokenized_test_dataset, tokenized_test_2_dataset = get_tokenized_dataset(
+        tokenizer, raw_test_dataset, raw_test_2_dataset
+    )
 
     test_transforms = get_transforms()
 
-    test_dataset_complete = CustomDataset("test", tokenized_test_dataset, test_transforms, log)
-    test_2_dataset_complete = CustomDataset("test", tokenized_test_2_dataset, test_transforms, log)
+    test_dataset_complete = CustomDataset(
+        "test", tokenized_test_dataset, test_transforms, log
+    )
+    test_2_dataset_complete = CustomDataset(
+        "test", tokenized_test_2_dataset, test_transforms, log
+    )
 
-    test_loader, test_2_loader = get_data_loaders(tokenizer, test_dataset_complete, test_2_dataset_complete)
+    test_loader, test_2_loader = get_data_loaders(
+        tokenizer, test_dataset_complete, test_2_dataset_complete
+    )
 
     model = get_model()
 

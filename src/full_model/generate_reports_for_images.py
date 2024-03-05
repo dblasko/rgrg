@@ -20,17 +20,23 @@ from tqdm import tqdm
 from src.full_model.report_generation_model import ReportGenerationModel
 from src.full_model.train_full_model import get_tokenizer
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 BERTSCORE_SIMILARITY_THRESHOLD = 0.9
-IMAGE_INPUT_SIZE = 512
+IMAGE_INPUT_SIZE = 224  # Daniel: Changed from 512 to 224 for tests
 MAX_NUM_TOKENS_GENERATE = 300
 NUM_BEAMS = 4
 mean = 0.471  # see get_transforms in src/dataset/compute_mean_std_dataset.py
 std = 0.302
 
 
-def write_generated_reports_to_txt(images_paths, generated_reports, generated_reports_txt_path):
+def write_generated_reports_to_txt(
+    images_paths, generated_reports, generated_reports_txt_path
+):
     with open(generated_reports_txt_path, "w") as f:
         for image_path, report in zip(images_paths, generated_reports):
             f.write(f"Image path: {image_path}\n")
@@ -39,9 +45,15 @@ def write_generated_reports_to_txt(images_paths, generated_reports, generated_re
             f.write("\n\n")
 
 
-def remove_duplicate_generated_sentences(generated_report, bert_score, sentence_tokenizer):
-    def check_gen_sent_in_sents_to_be_removed(gen_sent, similar_generated_sents_to_be_removed):
-        for lists_of_gen_sents_to_be_removed in similar_generated_sents_to_be_removed.values():
+def remove_duplicate_generated_sentences(
+    generated_report, bert_score, sentence_tokenizer
+):
+    def check_gen_sent_in_sents_to_be_removed(
+        gen_sent, similar_generated_sents_to_be_removed
+    ):
+        for (
+            lists_of_gen_sents_to_be_removed
+        ) in similar_generated_sents_to_be_removed.values():
             if gen_sent in lists_of_gen_sents_to_be_removed:
                 return True
 
@@ -70,15 +82,22 @@ def remove_duplicate_generated_sentences(generated_report, bert_score, sentence_
         gen_sent_1 = gen_sents[i]
 
         for j in range(i + 1, len(gen_sents)):
-            if check_gen_sent_in_sents_to_be_removed(gen_sent_1, similar_generated_sents_to_be_removed):
+            if check_gen_sent_in_sents_to_be_removed(
+                gen_sent_1, similar_generated_sents_to_be_removed
+            ):
                 break
 
             gen_sent_2 = gen_sents[j]
-            if check_gen_sent_in_sents_to_be_removed(gen_sent_2, similar_generated_sents_to_be_removed):
+            if check_gen_sent_in_sents_to_be_removed(
+                gen_sent_2, similar_generated_sents_to_be_removed
+            ):
                 continue
 
             bert_score_result = bert_score.compute(
-                lang="en", predictions=[gen_sent_1], references=[gen_sent_2], model_type="distilbert-base-uncased"
+                lang="en",
+                predictions=[gen_sent_1],
+                references=[gen_sent_2],
+                model_type="distilbert-base-uncased",
             )
 
             if bert_score_result["f1"][0] > BERTSCORE_SIMILARITY_THRESHOLD:
@@ -91,20 +110,28 @@ def remove_duplicate_generated_sentences(generated_report, bert_score, sentence_
     generated_report = " ".join(
         sent
         for sent in gen_sents
-        if not check_gen_sent_in_sents_to_be_removed(sent, similar_generated_sents_to_be_removed)
+        if not check_gen_sent_in_sents_to_be_removed(
+            sent, similar_generated_sents_to_be_removed
+        )
     )
 
     return generated_report
 
 
-def convert_generated_sentences_to_report(generated_sents_for_selected_regions, bert_score, sentence_tokenizer):
+def convert_generated_sentences_to_report(
+    generated_sents_for_selected_regions, bert_score, sentence_tokenizer
+):
     generated_report = " ".join(sent for sent in generated_sents_for_selected_regions)
 
-    generated_report = remove_duplicate_generated_sentences(generated_report, bert_score, sentence_tokenizer)
+    generated_report = remove_duplicate_generated_sentences(
+        generated_report, bert_score, sentence_tokenizer
+    )
     return generated_report
 
 
-def get_report_for_image(model, image_tensor, tokenizer, bert_score, sentence_tokenizer):
+def get_report_for_image(
+    model, image_tensor, tokenizer, bert_score, sentence_tokenizer
+):
     with torch.autocast(device_type="cuda", dtype=torch.float16):
         output = model.generate(
             image_tensor.to(device, non_blocking=True),
@@ -134,7 +161,11 @@ def get_image_tensor(image_path):
     val_test_transforms = A.Compose(
         [
             A.LongestMaxSize(max_size=IMAGE_INPUT_SIZE, interpolation=cv2.INTER_AREA),
-            A.PadIfNeeded(min_height=IMAGE_INPUT_SIZE, min_width=IMAGE_INPUT_SIZE, border_mode=cv2.BORDER_CONSTANT),
+            A.PadIfNeeded(
+                min_height=IMAGE_INPUT_SIZE,
+                min_width=IMAGE_INPUT_SIZE,
+                border_mode=cv2.BORDER_CONSTANT,
+            ),
             A.Normalize(mean=mean, std=std),
             ToTensorV2(),
         ]
@@ -193,10 +224,14 @@ def main():
 
     for image_path in tqdm(images_paths):
         image_tensor = get_image_tensor(image_path)  # shape (1, 1, 512, 512)
-        generated_report = get_report_for_image(model, image_tensor, tokenizer, bert_score, sentence_tokenizer)
+        generated_report = get_report_for_image(
+            model, image_tensor, tokenizer, bert_score, sentence_tokenizer
+        )
         generated_reports.append(generated_report)
 
-    write_generated_reports_to_txt(images_paths, generated_reports, generated_reports_txt_path)
+    write_generated_reports_to_txt(
+        images_paths, generated_reports, generated_reports_txt_path
+    )
 
 
 if __name__ == "__main__":

@@ -32,7 +32,11 @@ from src.dataset.constants import ANATOMICAL_REGIONS
 from src.full_model.evaluate_full_model.evaluate_language_model import evaluate_language_model
 from src.full_model.run_configurations import PRETRAIN_WITHOUT_LM_MODEL, WEIGHT_OBJECT_DETECTOR_LOSS, WEIGHT_BINARY_CLASSIFIER_REGION_SELECTION_LOSS, WEIGHT_BINARY_CLASSIFIER_REGION_ABNORMAL_LOSS, WEIGHT_LANGUAGE_MODEL_LOSS
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 
 def write_all_losses_and_scores_to_tensorboard(
