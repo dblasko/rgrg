@@ -23,9 +23,10 @@ path_test_set_evaluation_scores_txt_files will be the path where the txt files w
 base_path = "/users-2/blasko"
 path_chest_imagenome = f"{base_path}/datasets/ImaGenome"
 path_mimic_cxr = f"{base_path}/datasets/MIMIC-CXR"
-path_mimic_cxr_jpg = f"{base_path}/datasets/MIMIC-CXR-JPG"
+path_mimic_cxr_jpg = f"{base_path}/datasets/MIMIC-CXR-JPEG"
 path_full_dataset = f"{base_path}/datasets/rgrg-dataset-with-reference-reports"
 path_chexbert_weights = f"{base_path}/repos/rgrg/src/CheXbert/src/models/chexbert.pth"
 path_runs_object_detector = f"{base_path}/repos/rgrg/runs/object_detector"
 path_runs_full_model = f"{base_path}/repos/rgrg/runs/full_model"
 path_test_set_evaluation_scores_txt_files = f"{base_path}/repos/rgrg/src"
+small_imgs = True

@@ -51,7 +51,7 @@ from tqdm import tqdm
 
 from src.dataset.constants import ANATOMICAL_REGIONS, IMAGE_IDS_TO_IGNORE, SUBSTRINGS_TO_REMOVE
 import src.dataset.section_parser as sp
-from src.path_datasets_and_weights import path_chest_imagenome, path_mimic_cxr, path_mimic_cxr_jpg, path_full_dataset
+from src.path_datasets_and_weights import path_chest_imagenome, path_mimic_cxr, path_mimic_cxr_jpg, path_full_dataset, small_imgs
 
 device = torch.device(
     "cuda"
@@ -380,6 +380,11 @@ def get_rows(dataset: str, path_csv_file: str, image_ids_to_avoid: set) -> list[
     num_images_without_29_regions = 0
     missing_images = []
     missing_reports = []
+    
+    # If we use 256x256 images, we load their adapted bounding box coordinates
+    # if small_imgs:
+    #     with open(f"{path_mimic_cxr_jpg}/bbox_dset_v2.json") as bbox_json:
+    #         resized_bbox_annotations = json.load(bbox_json)
 
     with open(path_csv_file) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=",")
@@ -456,10 +461,16 @@ def get_rows(dataset: str, path_csv_file: str, image_ids_to_avoid: set) -> list[
             # objects is a list of obj_dicts where each dict contains the bbox coordinates for a single region
             for obj_dict in image_scene_graph["objects"]:
                 region_name = obj_dict["bbox_name"]
-                x1 = obj_dict["original_x1"]
-                y1 = obj_dict["original_y1"]
-                x2 = obj_dict["original_x2"]
-                y2 = obj_dict["original_y2"]
+                if not small_imgs:
+                    x1 = obj_dict["original_x1"]
+                    y1 = obj_dict["original_y1"]
+                    x2 = obj_dict["original_x2"]
+                    y2 = obj_dict["original_y2"]
+                else:
+                    x1 = obj_dict["x1"] # Chest ImaGenome: "The images were resized to 224x224 dimension [...]"
+                    y1 = obj_dict["y1"]
+                    x2 = obj_dict["x2"]
+                    y2 = obj_dict["y2"]
 
                 region_to_bbox_coordinates_dict[region_name] = [x1, y1, x2, y2]
 
