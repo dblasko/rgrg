@@ -1,0 +1,31 @@
+train:
+	num_images_ignored_or_avoided: 17
+	num_missing_images: 8
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p11/p11573679/s58235663/1a671a62-0a32dfc6-5f85029c-81c3922e-3f5a2c27.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p12/p12632853/s50798377/e3928346-ef911b2b-97e8a98b-5e622f73-b8474256.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p15/p15774521/s53071062/8b9c2944-8ae40f97-201432ae-58756bae-2fd0ffc3.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p15/p15774521/s53071062/c8d9eae3-1183877f-b8b29ac2-805eac5c-325a4fa7.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p16/p16312859/s54231141/ea927bee-1ee680d5-192da314-e380d70e-7493d73f.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p17/p17603668/s53607029/b054406d-d5c64945-896e6bd5-b331edad-4f3b5d52.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p19/p19349312/s52035334/6950b2cd-c8b962fb-1d79b366-aedc1523-70f8ef01.jpg
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p19/p19349312/s52035334/6b366988-371405bb-f9418aba-85aa406f-eed41538.jpg
+	num_missing_reports: 0
+	num_faulty_bboxes: 40900
+	num_images_without_29_regions: 7886
+
+valid:
+	num_images_ignored_or_avoided: 2
+	num_missing_images: 1
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p14/p14463099/s54168089/c8b18fab-d970277a-7e1f18df-95c19894-7bb3abce.jpg
+	num_missing_reports: 0
+	num_faulty_bboxes: 3670
+	num_images_without_29_regions: 717
+
+test:
+	num_images_ignored_or_avoided: 4
+	num_missing_images: 1
+		missing_img: /users-2/blasko/datasets/MIMIC-CXR-JPEG/files/p16/p16175671/s56724958/92c2d3f2-81af6356-c4ba9b42-1c9636b9-ae69d8b3.jpg
+	num_missing_reports: 0
+	num_faulty_bboxes: 6225
+	num_images_without_29_regions: 1205
+
