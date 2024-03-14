@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 from torchinfo import summary
 from transformers import GPT2LMHeadModel
-from transformers.generation_beam_search import BeamSearchScorer
+from transformers.generation.beam_search import BeamSearchScorer
 
 
 class Conv1DWithTrainedWeights(nn.Module):
