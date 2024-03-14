@@ -22,10 +22,10 @@ from tqdm import tqdm
 from src.dataset.constants import ANATOMICAL_REGIONS
 from src.object_detector.custom_image_dataset_object_detector import CustomImageDataset
 from src.object_detector.object_detector import ObjectDetector
-from src.path_datasets_and_weights import path_full_dataset, path_runs_object_detector
+from src.path_datasets_and_weights import path_full_dataset, path_runs_object_detector, small_imgs
 
 device = torch.device(
-    "cuda"
+    "cuda:0"
     if torch.cuda.is_available()
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )
@@ -34,11 +34,11 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s]: %(message)s")
 log = logging.getLogger(__name__)
 
 # define configurations for training run
-RUN = 14
+RUN = 0 
 # comment can be useful to add additional information to run_config.txt file
-RUN_COMMENT = """Enter comment here."""
+RUN_COMMENT = """First experimental 224x224 run."""
 SEED = 41
-IMAGE_INPUT_SIZE = 512
+IMAGE_INPUT_SIZE = 224 if small_imgs else 512
 PERCENTAGE_OF_TRAIN_SET_TO_USE = 1.0
 PERCENTAGE_OF_VAL_SET_TO_USE = 0.2
 BATCH_SIZE = 16

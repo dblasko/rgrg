@@ -7,6 +7,7 @@ from src.binary_classifier.binary_classifier_region_abnormal import BinaryClassi
 from src.binary_classifier.binary_classifier_region_selection import BinaryClassifierRegionSelection
 from src.object_detector.object_detector import ObjectDetector
 from src.language_model.language_model import LanguageModel
+from src.path_datasets_and_weights import path_runs_object_detector
 
 
 class ReportGenerationModel(nn.Module):
@@ -23,9 +24,9 @@ class ReportGenerationModel(nn.Module):
         self.pretrain_without_lm_model = pretrain_without_lm_model
 
         self.object_detector = ObjectDetector(return_feature_vectors=True)
-        # Load the best object detector from the 1st training stage here when starting the 2nd training stage
-        # path_to_best_object_detector_weights = "/u/home/tanida/runs/object_detector/run_10/weights/val_loss_13.482_epoch_6.pth"
-        # self.object_detector.load_state_dict(torch.load(path_to_best_object_detector_weights))
+        # Load the best object detector from the 1st training stage here when starting the 2nd training stage (next 2 lines were commented)
+        path_to_best_object_detector_weights = f"{path_runs_object_detector}/run_0/weights/val_loss_13.482_epoch_6.pth" # On his best 512x512 had val loss of 13.482, we have 13.180, comparable. He hit it at epoch 6, we did at epoch 10
+        self.object_detector.load_state_dict(torch.load(path_to_best_object_detector_weights))
 
         self.binary_classifier_region_selection = BinaryClassifierRegionSelection()
         self.binary_classifier_region_abnormal = BinaryClassifierRegionAbnormal()
