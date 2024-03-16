@@ -27,10 +27,10 @@ Ideally, the training should go like this:
     by specifying them in checkpoint = torch.load(...) in line 567
     - train full model with src/full_model/train_full_model.py
 """
-RUN = 0
-RUN_COMMENT = """First try at 2nd stage of training."""
+RUN = 1
+RUN_COMMENT = """First try at 3rd stage of training."""
 SEED = 42
-PRETRAIN_WITHOUT_LM_MODEL = True 
+PRETRAIN_WITHOUT_LM_MODEL = False 
 IMAGE_INPUT_SIZE = 224 # Daniel: adapted for our smaller image size
 PERCENTAGE_OF_TRAIN_SET_TO_USE = 1.0
 PERCENTAGE_OF_VAL_SET_TO_USE = 0.05

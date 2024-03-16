@@ -54,7 +54,7 @@ from src.full_model.run_configurations import (
 from src.path_datasets_and_weights import path_full_dataset, path_runs_full_model
 
 device = torch.device(
-    "cuda"
+    "cuda:0"
     if torch.cuda.is_available()
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )
@@ -655,9 +655,10 @@ def main():
 
     # resume_training = False
     checkpoint = None
-    # checkpoint = torch.load(
-    #     "/u/home/tanida/runs/full_model/run_45/checkpoints/checkpoint_val_loss_106.395_overall_steps_56835.pt", map_location=device
-    # )
+    # Daniel: uncommented & adapted stage 2 checkpoint loading
+    checkpoint = torch.load(
+        f"{path_runs_full_model}/run_0/checkpoints/checkpoint_val_loss_109.785_overall_steps_61630.pt", map_location=device
+    )
 
     model = get_model(checkpoint)
 
