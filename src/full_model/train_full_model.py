@@ -54,7 +54,7 @@ from src.full_model.run_configurations import (
 from src.path_datasets_and_weights import path_full_dataset, path_runs_full_model
 
 device = torch.device(
-    "cuda:0"
+    "cuda"
     if torch.cuda.is_available()
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )
@@ -67,6 +67,8 @@ random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
+# Disable tokenizer parallelism
+#os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def train_model(
@@ -658,6 +660,7 @@ def main():
     # Daniel: uncommented & adapted stage 2 checkpoint loading
     checkpoint = torch.load(
         f"{path_runs_full_model}/run_0/checkpoints/checkpoint_val_loss_109.785_overall_steps_61630.pt", map_location=device
+        # f"{path_runs_full_model}/run_1/checkpoints/checkpoint_val_loss_10.785_overall_steps_148800.pt", map_location=device
     )
 
     model = get_model(checkpoint)
@@ -676,6 +679,7 @@ def main():
     #     current_epoch = checkpoint["current_epoch"]
     #     overall_steps_taken = checkpoint["overall_steps_taken"]
     #     lowest_val_loss = checkpoint["lowest_val_loss"]
+    # print("CURRENT EPOCH:", current_epoch)
 
     lr_scheduler = ReduceLROnPlateau(
         opt,

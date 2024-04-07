@@ -25,7 +25,7 @@ from src.object_detector.object_detector import ObjectDetector
 from src.path_datasets_and_weights import path_full_dataset, path_runs_object_detector, small_imgs
 
 device = torch.device(
-    "cuda:0"
+    "cuda"
     if torch.cuda.is_available()
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )

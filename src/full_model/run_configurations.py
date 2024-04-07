@@ -27,16 +27,16 @@ Ideally, the training should go like this:
     by specifying them in checkpoint = torch.load(...) in line 567
     - train full model with src/full_model/train_full_model.py
 """
-RUN = 1
-RUN_COMMENT = """First try at 3rd stage of training."""
+RUN = 3
+RUN_COMMENT = """Third try at 3rd stage of training."""
 SEED = 42
 PRETRAIN_WITHOUT_LM_MODEL = False 
 IMAGE_INPUT_SIZE = 224 # Daniel: adapted for our smaller image size
 PERCENTAGE_OF_TRAIN_SET_TO_USE = 1.0
 PERCENTAGE_OF_VAL_SET_TO_USE = 0.05
-BATCH_SIZE = 16
-EFFECTIVE_BATCH_SIZE = 64  # batch size after gradient accumulation
-NUM_WORKERS = 10
+BATCH_SIZE = 1
+EFFECTIVE_BATCH_SIZE = 8  # batch size after gradient accumulation
+NUM_WORKERS = 4
 EPOCHS = 20
 LR = 5e-5
 # how often to evaluate the model on the validation set and log metrics to tensorboard (additionally, model will always be evaluated at end of epoch)
@@ -49,7 +49,7 @@ COOLDOWN_LR_SCHEDULER = 5
 NUM_BEAMS = 4
 # MAX_NUM_TOKENS_GENERATE is set arbitrarily to 300. Most generated sentences have at most 60 tokens,
 # so this is just an arbitrary threshold that will never be reached if the language model is not completely untrained (i.e. produces gibberish)
-MAX_NUM_TOKENS_GENERATE = 300
+MAX_NUM_TOKENS_GENERATE = 100
 NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 10  # save num_batches_of_... worth of generated sentences with their gt reference phrases to a txt file
 NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 10  # save num_batches_of_... worth of generated reports with their gt reference reports to a txt file
 NUM_BATCHES_TO_PROCESS_FOR_LANGUAGE_MODEL_EVALUATION = 100  # for evaluation of bleu, rouge-l and meteor
