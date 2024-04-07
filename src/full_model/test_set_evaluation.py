@@ -14,6 +14,8 @@ import torch
 from torch.utils.data import DataLoader
 import torchmetrics
 from tqdm import tqdm
+import pickle
+import evaluate
 
 from src.dataset.constants import ANATOMICAL_REGIONS
 from src.full_model.custom_collator import CustomCollator
@@ -41,23 +43,22 @@ from src.path_datasets_and_weights import (
 )
 
 # specify the checkpoint you want to evaluate by setting "RUN" and "CHECKPOINT"
-RUN = 38
-CHECKPOINT = "checkpoint_val_loss_20.850_overall_steps_195284.pt"
+RUN = 2
+CHECKPOINT = "checkpoint_val_loss_10.774_overall_steps_148800.pt" #"checkpoint_val_loss_20.850_overall_steps_195284.pt"
 BERTSCORE_SIMILARITY_THRESHOLD = 0.9
-IMAGE_INPUT_SIZE = 512
+IMAGE_INPUT_SIZE = 224
 BATCH_SIZE = 4
-NUM_WORKERS = 10
-NUM_BEAMS = 4
-MAX_NUM_TOKENS_GENERATE = 300
-NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 100
-NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 100
+NUM_WORKERS = 4
+NUM_BEAMS = 4 # TODO: was 4
+MAX_NUM_TOKENS_GENERATE = 80 # TODO: try lowering - check distrib° lengths
+NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 1 # used to be 100
+NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 1 # used to be 100
 
 device = torch.device(
     "cuda"
     if torch.cuda.is_available()
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )
-
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s]: %(message)s")
 log = logging.getLogger(__name__)
 
@@ -319,14 +320,17 @@ def write_sentences_and_reports_to_file_for_test_set(
 
     write_reports()
 
-
+@torch.no_grad()
 def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, tokenizer):
+    @torch.no_grad()
     def iterate_over_test_loader(test_loader):
         # to recover from potential OOMs
         oom = False
+        ooms = 0
 
         # used in function get_generated_reports
         sentence_tokenizer = spacy.load("en_core_web_trf")
+        bert_score = evaluate.load("bertscore")
 
         with torch.no_grad():
             for num_batch, batch in tqdm(enumerate(test_loader)):
@@ -344,26 +348,40 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
 
                 try:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
+                        torch.cuda.reset_peak_memory_stats(device=None)
+                        pre_inference_peak = torch.cuda.max_memory_allocated(device=None)
+                        
                         output = model.generate(
                             images.to(device, non_blocking=True),
                             max_length=MAX_NUM_TOKENS_GENERATE,
                             num_beams=NUM_BEAMS,
                             early_stopping=True,
                         )
+                        
+                        post_inference_peak = torch.cuda.max_memory_allocated(device=None)
+                        torch.cuda.reset_peak_memory_stats(device=None)
+                        post_dels = torch.cuda.max_memory_allocated(device=None)
+                        
+                        print(f"INFERENCE PASS - gpu pre-inference {pre_inference_peak / 1073741824} GB, post-inference {post_inference_peak / 1073741824} GB, post-dels {post_dels / 1073741824} GB.")
                 except RuntimeError as e:  # out of memory error
                     if "out of memory" in str(e):
                         oom = True
+                        ooms += 1
 
                         with open(final_scores_txt_file, "a") as f:
                             f.write("Generation:\n")
                             f.write(f"OOM at batch number {num_batch}.\n")
                             f.write(f"Error message: {str(e)}\n\n")
+                            print(f"OOM at batch number {num_batch}/{len(test_loader)}. Total OOMs so far: {ooms}.\n")
                     else:
                         raise e
 
                 if oom:
                     # free up memory
                     torch.cuda.empty_cache()
+                    torch.cuda.reset_peak_memory_stats(device=None)
+                    post_emptying_use = torch.cuda.max_memory_allocated(device=None)
+                    print(f"OOM CLEANUP - gpu post-emptying {post_emptying_use / 1073741824} GB of memory.")
                     oom = False
                     continue
 
@@ -380,6 +398,7 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                     # selected_regions is of shape [batch_size x 29] and is True for regions that should get a sentence
                     beam_search_output, selected_regions, _, _ = output
                     selected_regions = selected_regions.detach().cpu().numpy()
+                    
 
                 # generated_sentences_for_selected_regions is a List[str] of length "num_regions_selected_in_batch"
                 generated_sents_for_selected_regions = tokenizer.batch_decode(
@@ -387,6 +406,7 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                     skip_special_tokens=True,
                     clean_up_tokenization_spaces=True,
                 )
+                beam_search_output = beam_search_output.detach().cpu()
 
                 # filter reference_sentences to those that correspond to the generated_sentences for the selected regions.
                 # reference_sentences_for_selected_regions will therefore be a List[str] of length "num_regions_selected_in_batch"
@@ -409,12 +429,14 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                     reference_sents_for_selected_regions,
                 )
 
+                # get_generated_reports call caused leak by re-building bert_score at each call
                 generated_reports, removed_similar_generated_sentences = (
                     get_generated_reports(
                         generated_sents_for_selected_regions,
                         selected_regions,
                         sentence_tokenizer,
                         BERTSCORE_SIMILARITY_THRESHOLD,
+                        bert_score
                     )
                 )
 
@@ -458,7 +480,7 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                         generated_sents_for_selected_regions,
                         selected_regions,
                     )
-
+              
     # whilst iterating over the validation loader, save the (all, normal, abnormal) generated and reference sentences in the respective lists
     # the list under the key "num_generated_sentences_per_image" will hold integers that represent how many sentences were generated for each image
     # this is useful to be able to get all generated and reference sentences that correspond to the same image
@@ -505,6 +527,13 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
     log.info("Test loader 2: generating sentences/reports...")
     iterate_over_test_loader(test_2_loader)
     log.info("Test loader 2: generating sentences/reports... DONE.")
+    
+    # Load gen_and_ref_reports.Pkl and gen_and_ref_sentences.pkl
+    # with open('gen_and_ref_sentences.pkl', 'rb') as f:
+    #     gen_and_ref_sentences = pickle.load(f)
+
+    # with open('gen_and_ref_reports.pkl', 'rb') as f:
+    #     gen_and_ref_reports = pickle.load(f)
 
     write_sentences_and_reports_to_file_for_test_set(
         gen_and_ref_sentences,
@@ -517,11 +546,30 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
             f"Num generated reports: {len(gen_and_ref_reports['generated_reports'])}\n"
         )
 
-    log.info("Computing language_model_scores...")
-    language_model_scores = compute_language_model_scores(
-        gen_and_ref_sentences, gen_and_ref_reports
-    )
-    log.info("Computing language_model_scores... DONE.")
+    # Daniel: Pickle elements for debugging
+    # Pickle gen_and_ref_sentences and gen_and_ref_reports 
+    with open('gen_and_ref_sentences.pkl', 'wb') as f:
+        pickle.dump(gen_and_ref_sentences, f)
+
+    with open('gen_and_ref_reports.pkl', 'wb') as f:
+        pickle.dump(gen_and_ref_reports, f)
+    
+    try:
+        log.info("Computing language_model_scores...")
+        language_model_scores = compute_language_model_scores(
+            gen_and_ref_sentences, gen_and_ref_reports
+        )
+        log.info("Computing language_model_scores... DONE.")
+    except Exception as e: 
+        print(e)
+        return None
+    except RuntimeError as e:
+        print(e)
+        return None
+    except:
+        print(e)
+        return None
+        
 
     return language_model_scores
 
@@ -661,10 +709,11 @@ def update_object_detector_metrics_test_loader_2(
     ] += intersection_area_per_region_batch
     obj_detector_scores["sum_union_area_per_region"] += union_area_per_region_batch
 
-
+@torch.no_grad()
 def evaluate_obj_detector_and_binary_classifiers_on_test_set(
     model, test_loader, test_2_loader
 ):
+    @torch.no_grad()
     def iterate_over_test_loader(test_loader, num_images, is_test_2_loader):
         """
         We have to distinguish between test_loader and test_2_loader,
@@ -679,6 +728,7 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(
         """
         # to potentially recover if anything goes wrong
         oom = False
+        ooms = 0
 
         with torch.no_grad():
             for num_batch, batch in tqdm(enumerate(test_loader)):
@@ -713,10 +763,12 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(
                 except RuntimeError as e:  # out of memory error
                     if "out of memory" in str(e):
                         oom = True
+                        ooms += 1
 
                         with open(final_scores_txt_file, "a") as f:
                             f.write(f"OOM at batch number {num_batch}.\n")
                             f.write(f"Error message: {str(e)}\n\n")
+                            print(f"Obj. Det. OOM at batch number {num_batch}/{len(test_loader)}. Total OOMs so far: {ooms}.\n")
                     else:
                         raise e
 
@@ -878,6 +930,15 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(
     for metric, score in region_abnormal_scores.items():
         region_abnormal_scores[metric] = score.compute()[1].item()
 
+    # with open('obj_detector_scores.pkl', 'rb') as f:
+    #     obj_detector_scores = pickle.load(f)
+
+    # with open('region_selection_scores.pkl', 'rb') as f:
+    #     region_selection_scores = pickle.load(f)
+        
+    # with open('region_abnormal_scores.pkl', 'rb') as f:
+    #     region_abnormal_scores = pickle.load(f)
+    
     return obj_detector_scores, region_selection_scores, region_abnormal_scores
 
 
@@ -887,11 +948,22 @@ def evaluate_model_on_test_set(model, test_loader, test_2_loader, tokenizer):
             model, test_loader, test_2_loader
         )
     )
-
+    
     language_model_scores = evaluate_language_model_on_test_set(
         model, test_loader, test_2_loader, tokenizer
     )
 
+    if language_model_scores is None:
+        print("Language model score error!")
+    with open('obj_detector_scores.pkl', 'wb') as f:
+        pickle.dump(obj_detector_scores, f)
+
+    with open('region_selection_scores.pkl', 'wb') as f:
+        pickle.dump(region_selection_scores, f)
+
+    with open('region_abnormal_scores.pkl', 'wb') as f:
+        pickle.dump(region_abnormal_scores, f)
+        
     write_all_scores_to_file(
         obj_detector_scores,
         region_selection_scores,
@@ -919,6 +991,8 @@ def get_model():
     model.load_state_dict(checkpoint["model"])
     model.to(device, non_blocking=True)
     model.eval()
+    
+    print(f"MODEL LOADED - gpu used {torch.cuda.max_memory_allocated(device=None) / 1073741824} GB of memory")
 
     del checkpoint
 

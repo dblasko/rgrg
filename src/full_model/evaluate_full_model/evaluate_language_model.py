@@ -985,8 +985,7 @@ def update_gen_and_ref_sentences_for_regions(
 
             index_gen_ref_sentence += 1
 
-
-def get_generated_reports(generated_sentences_for_selected_regions, selected_regions, sentence_tokenizer, bertscore_threshold):
+def get_generated_reports(generated_sentences_for_selected_regions, selected_regions, sentence_tokenizer, bertscore_threshold, bert_score):
     """
     Args:
         generated_sentences_for_selected_regions (List[str]): of length "num_regions_selected_in_batch"
@@ -998,6 +997,7 @@ def get_generated_reports(generated_sentences_for_selected_regions, selected_reg
         removed_similar_generated_sentences (List[Dict[str, List]): list of length batch_size containing dicts that map from one generated sentence to a list
         of other generated sentences that were removed because they were too similar. Useful for manually verifying if removing similar generated sentences was successful
     """
+    @torch.no_grad()
     def remove_duplicate_generated_sentences(gen_report_single_image, bert_score):
         def check_gen_sent_in_sents_to_be_removed(gen_sent, similar_generated_sents_to_be_removed):
             for lists_of_gen_sents_to_be_removed in similar_generated_sents_to_be_removed.values():
@@ -1010,6 +1010,7 @@ def get_generated_reports(generated_sentences_for_selected_regions, selected_reg
 
         # use sentence tokenizer to separate the generated sentences
         gen_sents_single_image = sentence_tokenizer(gen_report_single_image).sents
+        # del output
 
         # convert spacy.tokens.span.Span object into str by using .text attribute
         gen_sents_single_image = [sent.text for sent in gen_sents_single_image]
@@ -1052,14 +1053,14 @@ def get_generated_reports(generated_sentences_for_selected_regions, selected_reg
                         similar_generated_sents_to_be_removed[gen_sent_1].append(gen_sent_2)
                     else:
                         similar_generated_sents_to_be_removed[gen_sent_2].append(gen_sent_1)
+                
+                # del bert_score_result
 
         gen_report_single_image = " ".join(
             sent for sent in gen_sents_single_image if not check_gen_sent_in_sents_to_be_removed(sent, similar_generated_sents_to_be_removed)
         )
 
         return gen_report_single_image, similar_generated_sents_to_be_removed
-
-    bert_score = evaluate.load("bertscore")
 
     generated_reports = []
     removed_similar_generated_sentences = []
@@ -1083,6 +1084,8 @@ def get_generated_reports(generated_sentences_for_selected_regions, selected_reg
         gen_report_single_image, similar_generated_sents_to_be_removed = remove_duplicate_generated_sentences(
             gen_report_single_image, bert_score
         )
+        
+        del bert_score
 
         generated_reports.append(gen_report_single_image)
         removed_similar_generated_sentences.append(similar_generated_sents_to_be_removed)

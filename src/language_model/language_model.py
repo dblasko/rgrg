@@ -256,7 +256,7 @@ class LanguageModel(nn.Module):
         super().__init__()
         self.checkpoint = "healx/gpt-2-pubmed-medium"
         self.device = torch.device(
-            "cuda:0"
+            "cuda"
             if torch.cuda.is_available()
             else ("mps" if torch.backends.mps.is_available() else "cpu")
         )
@@ -833,7 +833,7 @@ def print_model_summary(batch_size, seq_len, verbose):
     inputs["image_hidden_states"] = torch.rand(batch_size, (2048 * 8 * 8))
 
     device = torch.device(
-        "cuda:0"
+        "cuda"
         if torch.cuda.is_available()
         else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
