@@ -333,7 +333,7 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
         bert_score = evaluate.load("bertscore")
 
         with torch.no_grad():
-            for num_batch, batch in tqdm(enumerate(test_loader)):
+            for num_batch, batch in tqdm(enumerate(test_loader), total=len(test_loader)):
 
                 images = batch["images"]  # shape [batch_size x 1 x 512 x 512]
                 region_is_abnormal = batch[
@@ -348,8 +348,9 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
 
                 try:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        torch.cuda.reset_peak_memory_stats(device=None)
-                        pre_inference_peak = torch.cuda.max_memory_allocated(device=None)
+                        if num_batch <= 5:
+                            torch.cuda.reset_peak_memory_stats(device=None)
+                            pre_inference_peak = torch.cuda.max_memory_allocated(device=None)
                         
                         output = model.generate(
                             images.to(device, non_blocking=True),
@@ -358,11 +359,11 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                             early_stopping=True,
                         )
                         
-                        post_inference_peak = torch.cuda.max_memory_allocated(device=None)
-                        torch.cuda.reset_peak_memory_stats(device=None)
-                        post_dels = torch.cuda.max_memory_allocated(device=None)
-                        
-                        print(f"INFERENCE PASS - gpu pre-inference {pre_inference_peak / 1073741824} GB, post-inference {post_inference_peak / 1073741824} GB, post-dels {post_dels / 1073741824} GB.")
+                        if num_batch <= 5:
+                            post_inference_peak = torch.cuda.max_memory_allocated(device=None)
+                            torch.cuda.reset_peak_memory_stats(device=None)
+                            post_dels = torch.cuda.max_memory_allocated(device=None)
+                            print(f"INFERENCE PASS - gpu pre-inference {pre_inference_peak / 1073741824} GB, post-inference {post_inference_peak / 1073741824} GB, post-dels {post_dels / 1073741824} GB.")
                 except RuntimeError as e:  # out of memory error
                     if "out of memory" in str(e):
                         oom = True
@@ -379,9 +380,9 @@ def evaluate_language_model_on_test_set(model, test_loader, test_2_loader, token
                 if oom:
                     # free up memory
                     torch.cuda.empty_cache()
-                    torch.cuda.reset_peak_memory_stats(device=None)
-                    post_emptying_use = torch.cuda.max_memory_allocated(device=None)
-                    print(f"OOM CLEANUP - gpu post-emptying {post_emptying_use / 1073741824} GB of memory.")
+                    #torch.cuda.reset_peak_memory_stats(device=None)
+                    #post_emptying_use = torch.cuda.max_memory_allocated(device=None)
+                    #print(f"OOM CLEANUP - gpu post-emptying {post_emptying_use / 1073741824} GB of memory.")
                     oom = False
                     continue
 
@@ -731,7 +732,7 @@ def evaluate_obj_detector_and_binary_classifiers_on_test_set(
         ooms = 0
 
         with torch.no_grad():
-            for num_batch, batch in tqdm(enumerate(test_loader)):
+            for num_batch, batch in tqdm(enumerate(test_loader), total=len(test_loader)):
                 images = batch["images"]
                 image_targets = batch["image_targets"]
                 region_has_sentence = batch["region_has_sentence"]
@@ -992,7 +993,7 @@ def get_model():
     model.to(device, non_blocking=True)
     model.eval()
     
-    print(f"MODEL LOADED - gpu used {torch.cuda.max_memory_allocated(device=None) / 1073741824} GB of memory")
+    # print(f"MODEL LOADED - gpu used {torch.cuda.max_memory_allocated(device=None) / 1073741824} GB of memory")
 
     del checkpoint
 
