@@ -7,3 +7,6 @@ src/CheXbert/src/models/chexbert.pth
 *.pt
 *.pt
 src/full_model/full_model_checkpoint_val_loss_19.793_overall_steps_155252.pt
+*.txt
+*.pkl
+runs/
