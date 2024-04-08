@@ -51,8 +51,8 @@ BATCH_SIZE = 4
 NUM_WORKERS = 4
 NUM_BEAMS = 4 # TODO: was 4
 MAX_NUM_TOKENS_GENERATE = 80 # TODO: try lowering - check distrib° lengths
-NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 1 # used to be 100
-NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 1 # used to be 100
+NUM_BATCHES_OF_GENERATED_SENTENCES_TO_SAVE_TO_FILE = 100 # used to be 100
+NUM_BATCHES_OF_GENERATED_REPORTS_TO_SAVE_TO_FILE = 100 # used to be 100
 
 device = torch.device(
     "cuda"
@@ -710,11 +710,9 @@ def update_object_detector_metrics_test_loader_2(
     ] += intersection_area_per_region_batch
     obj_detector_scores["sum_union_area_per_region"] += union_area_per_region_batch
 
-@torch.no_grad()
 def evaluate_obj_detector_and_binary_classifiers_on_test_set(
     model, test_loader, test_2_loader
 ):
-    @torch.no_grad()
     def iterate_over_test_loader(test_loader, num_images, is_test_2_loader):
         """
         We have to distinguish between test_loader and test_2_loader,

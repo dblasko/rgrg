@@ -1085,7 +1085,7 @@ def get_generated_reports(generated_sentences_for_selected_regions, selected_reg
             gen_report_single_image, bert_score
         )
         
-        del bert_score
+        # del bert_score
 
         generated_reports.append(gen_report_single_image)
         removed_similar_generated_sentences.append(similar_generated_sents_to_be_removed)
